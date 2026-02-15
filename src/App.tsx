@@ -26,20 +26,20 @@ function App() {
 
     useEffect(() => {
         // Kiểm tra session hiện tại
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
             if (session?.user) {
                 setUser(session.user);
-                fetchProfile(session.user.id);
+                await fetchProfile(session.user.id);
             }
             setLoading(false);
             setInitializing(false);
         });
 
         // Lắng nghe thay đổi auth
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session?.user) {
                 setUser(session.user);
-                fetchProfile(session.user.id);
+                await fetchProfile(session.user.id);
             } else {
                 setUser(null);
             }
