@@ -15,13 +15,26 @@ CREATE TABLE profiles (
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+-- Helper function: kiểm tra teacher role (SECURITY DEFINER bypass RLS)
+CREATE OR REPLACE FUNCTION is_teacher()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'
+  );
+$$;
+
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT TO authenticated
   USING (id = auth.uid());
 
 CREATE POLICY "Teacher can view all profiles"
   ON profiles FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE TO authenticated
@@ -29,7 +42,7 @@ CREATE POLICY "Users can update own profile"
 
 CREATE POLICY "Teacher can update any profile"
   ON profiles FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 -- Trigger tự tạo profile khi đăng ký
 CREATE OR REPLACE FUNCTION handle_new_user()
@@ -67,7 +80,7 @@ ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage classes"
   ON classes FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view active classes"
   ON classes FOR SELECT TO authenticated
@@ -93,7 +106,7 @@ CREATE POLICY "Anyone can view ranks"
 
 CREATE POLICY "Teacher can manage ranks"
   ON ranks FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 -- Insert 10 cấp bậc mặc định
 INSERT INTO ranks (rank_name, min_points, multiplier, icon, color, description, sort_order) VALUES
@@ -127,7 +140,7 @@ ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage students"
   ON students FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view own data"
   ON students FOR SELECT TO authenticated
@@ -148,7 +161,7 @@ ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage groups"
   ON groups FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view groups"
   ON groups FOR SELECT TO authenticated
@@ -167,7 +180,7 @@ ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage group_members"
   ON group_members FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view group_members"
   ON group_members FOR SELECT TO authenticated
@@ -189,7 +202,7 @@ ALTER TABLE criteria ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage criteria"
   ON criteria FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view criteria"
   ON criteria FOR SELECT TO authenticated
@@ -212,7 +225,7 @@ ALTER TABLE point_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage point_history"
   ON point_history FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view own points"
   ON point_history FOR SELECT TO authenticated
@@ -236,7 +249,7 @@ ALTER TABLE rewards ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage rewards"
   ON rewards FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view active rewards"
   ON rewards FOR SELECT TO authenticated
@@ -257,7 +270,7 @@ ALTER TABLE reward_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teacher can manage reward_history"
   ON reward_history FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher'));
+  USING (is_teacher());
 
 CREATE POLICY "Students can view own reward_history"
   ON reward_history FOR SELECT TO authenticated
@@ -288,9 +301,7 @@ CREATE POLICY "Users update own notifications"
 
 CREATE POLICY "Teacher insert notifications"
   ON notifications FOR INSERT TO authenticated
-  WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'teacher')
-  );
+  WITH CHECK (is_teacher());
 
 -- Bật Realtime cho notifications
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
