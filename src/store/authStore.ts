@@ -24,53 +24,25 @@ export const useAuthStore = create<AuthState>((set) => ({
     setLoading: (loading) => set({ loading }),
 
     fetchProfile: async (userId: string) => {
-        // Helper timeout cho Supabase query
-        const queryWithTimeout = <T,>(queryFn: () => PromiseLike<T>, ms: number, label: string): Promise<T> => {
-            return new Promise<T>((resolve, reject) => {
-                const timer = setTimeout(() => reject(new Error(`Timeout ${label} sau ${ms}ms`)), ms);
-                Promise.resolve(queryFn()).then(
-                    (result) => { clearTimeout(timer); resolve(result); },
-                    (err) => { clearTimeout(timer); reject(err); }
-                );
-            });
-        };
-
-        // Cách 1: Query trực tiếp (dùng RLS policy "Users can view own profile" - id = auth.uid())
         try {
-            console.log('[fetchProfile] Trying direct query...');
-            const { data, error } = await queryWithTimeout(
-                () => supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-                5000, 'direct query'
-            );
-            if (!error && data) {
-                console.log('[fetchProfile] Direct query OK:', data);
-                set({ profile: data as Profile });
-                return;
-            }
-            console.warn('[fetchProfile] Direct query failed:', error?.message || 'no data');
-        } catch (err: any) {
-            console.error('[fetchProfile] Direct query error:', err.message);
-        }
+            console.log('[fetchProfile] Loading profile for', userId);
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle();
 
-        // Cách 2: RPC get_my_profile (SECURITY DEFINER bypass RLS)
-        try {
-            console.log('[fetchProfile] Trying RPC get_my_profile...');
-            const { data, error } = await queryWithTimeout(
-                () => supabase.rpc('get_my_profile'),
-                5000, 'RPC'
-            );
-            if (!error && data) {
-                console.log('[fetchProfile] RPC OK:', data);
-                set({ profile: data as Profile });
-                return;
+            if (error) {
+                console.error('[fetchProfile] Error:', error.message);
+                set({ profile: null });
+            } else {
+                console.log('[fetchProfile] OK:', data);
+                set({ profile: data as Profile | null });
             }
-            console.warn('[fetchProfile] RPC failed:', error?.message || 'no data');
         } catch (err: any) {
-            console.error('[fetchProfile] RPC error:', err.message);
+            console.error('[fetchProfile] Exception:', err.message);
+            set({ profile: null });
         }
-
-        console.error('[fetchProfile] All methods failed, profile = null');
-        set({ profile: null });
     },
 
     signOut: async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
@@ -25,28 +25,6 @@ import StudentApproval from './pages/StudentApproval';
 function App() {
     const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
     const [ready, setReady] = useState(false);
-    const [profileLoading, setProfileLoading] = useState(false);
-
-    // Retry fetchProfile nếu lần đầu thất bại
-    const retryFetchProfile = useCallback(async (userId: string, retries = 3) => {
-        for (let i = 0; i < retries; i++) {
-            try {
-                await fetchProfile(userId);
-                const p = useAuthStore.getState().profile;
-                if (p) {
-                    console.log('[App] Profile loaded on attempt', i + 1, p);
-                    return true;
-                }
-                console.warn(`[App] Profile null on attempt ${i + 1}, retrying...`);
-                // Đợi 1s trước khi retry
-                await new Promise(r => setTimeout(r, 1000));
-            } catch (err) {
-                console.error(`[App] fetchProfile attempt ${i + 1} error:`, err);
-                await new Promise(r => setTimeout(r, 1000));
-            }
-        }
-        return false;
-    }, [fetchProfile]);
 
     useEffect(() => {
         console.log('[App] Setting up auth listener...');
@@ -57,21 +35,17 @@ function App() {
             if (event === 'INITIAL_SESSION') {
                 if (session?.user) {
                     setUser(session.user);
-                    setProfileLoading(true);
-                    await retryFetchProfile(session.user.id);
-                    setProfileLoading(false);
+                    await fetchProfile(session.user.id);
+                    console.log('[App] Ready! profile:', useAuthStore.getState().profile);
                 }
                 setLoading(false);
                 setReady(true);
-                console.log('[App] Ready! profile:', useAuthStore.getState().profile);
             } else if (event === 'SIGNED_IN') {
                 setUser(session!.user);
-                setProfileLoading(true);
-                await retryFetchProfile(session!.user.id);
-                setProfileLoading(false);
+                await fetchProfile(session!.user.id);
+                console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
                 setLoading(false);
                 setReady(true);
-                console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
             } else if (event === 'SIGNED_OUT') {
                 setUser(null);
                 useAuthStore.setState({ profile: null });
@@ -80,13 +54,12 @@ function App() {
             }
         });
 
-        // Safety timeout 10s (tăng lên để profile có thời gian load)
+        // Safety timeout 8s
         const timeout = setTimeout(() => {
             console.warn('[App] Safety timeout triggered');
-            setProfileLoading(false);
             setLoading(false);
             setReady(true);
-        }, 10000);
+        }, 8000);
 
         return () => {
             subscription.unsubscribe();
@@ -94,8 +67,7 @@ function App() {
         };
     }, []);
 
-    // Đang load app
-    if (!ready || profileLoading) {
+    if (!ready) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
@@ -131,11 +103,7 @@ function App() {
                     </p>
                     <div className="space-y-3">
                         <button
-                            onClick={async () => {
-                                setProfileLoading(true);
-                                await retryFetchProfile(user.id);
-                                setProfileLoading(false);
-                            }}
+                            onClick={() => fetchProfile(user.id)}
                             className="w-full py-3 bg-gradient-to-r from-flame-500 to-flame-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
                         >
                             Thử lại
