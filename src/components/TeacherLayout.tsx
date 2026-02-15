@@ -42,9 +42,12 @@ export default function TeacherLayout() {
 
     async function loadPendingCount() {
         try {
-            const { data } = await supabase.rpc('get_pending_students');
-            const students = (data || []) as any[];
-            setPendingCount(students.filter((s: any) => s.status === 'pending').length);
+            const { data, error } = await supabase.rpc('get_pending_students');
+            if (error || !data || !Array.isArray(data)) {
+                setPendingCount(0);
+                return;
+            }
+            setPendingCount(data.filter((s: any) => s.status === 'pending').length);
         } catch { setPendingCount(0); }
     }
 
