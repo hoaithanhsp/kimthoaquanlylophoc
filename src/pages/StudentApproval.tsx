@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { UserCheck, UserX, Clock, Mail, Loader2, RefreshCw, CheckCircle2, XCircle, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDateTime } from '../lib/helpers';
+import type { Class } from '../types';
 
 interface PendingStudent {
     id: string;
@@ -13,12 +14,15 @@ interface PendingStudent {
 
 export default function StudentApproval() {
     const [students, setStudents] = useState<PendingStudent[]>([]);
+    const [classes, setClasses] = useState<Class[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState('');
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
         loadPendingStudents();
+        loadClasses();
 
         // Realtime: subscribe cho profiles thay đổi
         const channel = supabase
@@ -34,6 +38,13 @@ export default function StudentApproval() {
 
         return () => { supabase.removeChannel(channel); };
     }, []);
+
+    async function loadClasses() {
+        const { data } = await supabase.from('classes').select('*').eq('is_active', true).order('class_name');
+        const cls = (data || []) as Class[];
+        setClasses(cls);
+        if (cls.length > 0 && !selectedClassId) setSelectedClassId(cls[0].id);
+    }
 
     async function loadPendingStudents() {
         try {
@@ -52,14 +63,21 @@ export default function StudentApproval() {
     }
 
     async function handleApprove(studentId: string) {
+        if (!selectedClassId) {
+            setMessage({ type: 'error', text: 'Vui lòng chọn lớp trước khi phê duyệt' });
+            return;
+        }
         setActionLoading(studentId);
         setMessage(null);
         try {
-            const { data, error } = await supabase.rpc('approve_student', { p_user_id: studentId });
+            const { data, error } = await supabase.rpc('approve_student', {
+                p_user_id: studentId,
+                p_class_id: selectedClassId,
+            });
             if (error) throw error;
             const result = data as any;
             if (result.success) {
-                setMessage({ type: 'success', text: `✅ Đã phê duyệt học sinh ${result.student_name}` });
+                setMessage({ type: 'success', text: `✅ Đã phê duyệt và thêm ${result.student_name} vào lớp` });
                 setStudents(prev => prev.filter(s => s.id !== studentId));
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -81,7 +99,6 @@ export default function StudentApproval() {
             const result = data as any;
             if (result.success) {
                 setMessage({ type: 'success', text: `❌ Đã từ chối học sinh ${result.student_name}` });
-                // Cập nhật status trong list
                 setStudents(prev => prev.map(s =>
                     s.id === studentId ? { ...s, status: 'rejected' as const } : s
                 ));
@@ -98,17 +115,24 @@ export default function StudentApproval() {
     async function handleApproveAll() {
         const pendingIds = students.filter(s => s.status === 'pending').map(s => s.id);
         if (pendingIds.length === 0) return;
-        if (!confirm(`Phê duyệt tất cả ${pendingIds.length} học sinh?`)) return;
+        if (!selectedClassId) {
+            setMessage({ type: 'error', text: 'Vui lòng chọn lớp trước khi phê duyệt' });
+            return;
+        }
+        if (!confirm(`Phê duyệt tất cả ${pendingIds.length} học sinh vào lớp?`)) return;
 
         setActionLoading('all');
         let approvedCount = 0;
         for (const id of pendingIds) {
             try {
-                const { data } = await supabase.rpc('approve_student', { p_user_id: id });
+                const { data } = await supabase.rpc('approve_student', {
+                    p_user_id: id,
+                    p_class_id: selectedClassId,
+                });
                 if ((data as any)?.success) approvedCount++;
             } catch { /* skip */ }
         }
-        setMessage({ type: 'success', text: `✅ Đã phê duyệt ${approvedCount}/${pendingIds.length} học sinh` });
+        setMessage({ type: 'success', text: `✅ Đã phê duyệt ${approvedCount}/${pendingIds.length} học sinh vào lớp` });
         await loadPendingStudents();
         setActionLoading(null);
     }
@@ -167,11 +191,30 @@ export default function StudentApproval() {
                 </div>
             </div>
 
+            {/* Chọn Lớp */}
+            {classes.length > 0 && students.length > 0 && (
+                <div className="glass-strong rounded-2xl p-4">
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-2">
+                        <Users className="w-4 h-4 text-flame-500" />
+                        Thêm vào lớp khi phê duyệt
+                    </label>
+                    <select
+                        value={selectedClassId}
+                        onChange={e => setSelectedClassId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-flame-500/30 focus:border-flame-400"
+                    >
+                        {classes.map(c => (
+                            <option key={c.id} value={c.id}>{c.class_name}</option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1.5">Học sinh sẽ được tự động thêm vào lớp này khi phê duyệt</p>
+                </div>
+            )}
             {/* Message */}
             {message && (
                 <div className={`p-3 rounded-xl text-sm animate-slide-down ${message.type === 'success'
-                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                        : 'bg-red-50 border border-red-200 text-red-700'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                    : 'bg-red-50 border border-red-200 text-red-700'
                     }`}>
                     {message.text}
                 </div>
@@ -213,8 +256,8 @@ export default function StudentApproval() {
                             <div className="flex items-center gap-4">
                                 {/* Avatar */}
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg ${student.status === 'pending'
-                                        ? 'bg-gradient-to-br from-amber-400 to-orange-500'
-                                        : 'bg-gradient-to-br from-red-400 to-red-500'
+                                    ? 'bg-gradient-to-br from-amber-400 to-orange-500'
+                                    : 'bg-gradient-to-br from-red-400 to-red-500'
                                     }`}>
                                     {(student.full_name || '?').charAt(0).toUpperCase()}
                                 </div>
@@ -230,8 +273,8 @@ export default function StudentApproval() {
                                     </div>
                                     <div className="flex items-center gap-2 mt-1">
                                         <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${student.status === 'pending'
-                                                ? 'bg-amber-100 text-amber-700'
-                                                : 'bg-red-100 text-red-700'
+                                            ? 'bg-amber-100 text-amber-700'
+                                            : 'bg-red-100 text-red-700'
                                             }`}>
                                             {student.status === 'pending' ? (
                                                 <><Clock className="w-2.5 h-2.5" /> Chờ duyệt</>
