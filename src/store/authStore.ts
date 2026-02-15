@@ -24,12 +24,27 @@ export const useAuthStore = create<AuthState>((set) => ({
     setLoading: (loading) => set({ loading }),
 
     fetchProfile: async (userId: string) => {
-        const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle();
-        set({ profile: data as Profile | null });
+        try {
+            // Dùng RPC function có SECURITY DEFINER để bypass RLS
+            const { data, error } = await supabase.rpc('get_my_profile');
+            console.log('fetchProfile RPC result:', { data, error, userId });
+            if (error) {
+                console.error('fetchProfile RPC error:', error);
+                // Fallback: thử query trực tiếp
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', userId)
+                    .maybeSingle();
+                console.log('fetchProfile fallback:', { fallbackData, fallbackError });
+                set({ profile: fallbackData as Profile | null });
+            } else {
+                set({ profile: data as Profile | null });
+            }
+        } catch (err) {
+            console.error('fetchProfile exception:', err);
+            set({ profile: null });
+        }
     },
 
     signOut: async () => {
