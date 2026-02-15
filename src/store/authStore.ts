@@ -3,6 +3,16 @@ import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '../types';
 
+// Helper: thêm timeout cho bất kỳ promise nào
+function withTimeout<T>(promise: Promise<T>, ms: number, label = ''): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout ${label} sau ${ms}ms`)), ms)
+        ),
+    ]);
+}
+
 interface AuthState {
     user: User | null;
     profile: Profile | null;
@@ -24,34 +34,44 @@ export const useAuthStore = create<AuthState>((set) => ({
     setLoading: (loading) => set({ loading }),
 
     fetchProfile: async (userId: string) => {
+        // Cách 1: Query trực tiếp (dùng RLS policy "Users can view own profile" - id = auth.uid())
         try {
-            console.log('[fetchProfile] Calling get_my_profile RPC...');
-            // Dùng RPC function có SECURITY DEFINER để bypass RLS
-            const { data, error } = await supabase.rpc('get_my_profile');
-            console.log('[fetchProfile] RPC result:', { data, error, userId });
-            if (error) {
-                console.error('[fetchProfile] RPC error:', error.message);
-                // Fallback: thử query trực tiếp
-                console.log('[fetchProfile] Trying fallback query...');
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', userId)
-                    .maybeSingle();
-                console.log('[fetchProfile] Fallback result:', { fallbackData, fallbackError });
-                if (fallbackError) {
-                    console.error('[fetchProfile] Fallback error:', fallbackError.message);
-                    set({ profile: null });
-                } else {
-                    set({ profile: fallbackData as Profile | null });
-                }
-            } else {
-                set({ profile: data as Profile | null });
+            console.log('[fetchProfile] Trying direct query...');
+            const { data, error } = await withTimeout(
+                supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+                5000,
+                'direct query'
+            );
+            if (!error && data) {
+                console.log('[fetchProfile] Direct query OK:', data);
+                set({ profile: data as Profile });
+                return;
             }
-        } catch (err) {
-            console.error('[fetchProfile] Exception:', err);
-            set({ profile: null });
+            console.warn('[fetchProfile] Direct query failed:', error?.message || 'no data');
+        } catch (err: any) {
+            console.error('[fetchProfile] Direct query error:', err.message);
         }
+
+        // Cách 2: RPC get_my_profile (SECURITY DEFINER bypass RLS)
+        try {
+            console.log('[fetchProfile] Trying RPC get_my_profile...');
+            const { data, error } = await withTimeout(
+                supabase.rpc('get_my_profile'),
+                5000,
+                'RPC'
+            );
+            if (!error && data) {
+                console.log('[fetchProfile] RPC OK:', data);
+                set({ profile: data as Profile });
+                return;
+            }
+            console.warn('[fetchProfile] RPC failed:', error?.message || 'no data');
+        } catch (err: any) {
+            console.error('[fetchProfile] RPC error:', err.message);
+        }
+
+        console.error('[fetchProfile] All methods failed, profile = null');
+        set({ profile: null });
     },
 
     signOut: async () => {
