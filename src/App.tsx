@@ -26,46 +26,44 @@ function App() {
     const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
     const [ready, setReady] = useState(false);
 
+    // Effect 1: Lắng nghe auth state (KHÔNG await bên trong!)
     useEffect(() => {
         console.log('[App] Setting up auth listener...');
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             console.log('[App] Auth event:', event, session ? 'has session' : 'no session');
 
-            if (event === 'INITIAL_SESSION') {
-                if (session?.user) {
-                    setUser(session.user);
-                    await fetchProfile(session.user.id);
-                    console.log('[App] Ready! profile:', useAuthStore.getState().profile);
-                }
-                setLoading(false);
-                setReady(true);
-            } else if (event === 'SIGNED_IN') {
-                setUser(session!.user);
-                await fetchProfile(session!.user.id);
-                console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
-                setLoading(false);
-                setReady(true);
-            } else if (event === 'SIGNED_OUT') {
+            if (session?.user) {
+                setUser(session.user);
+            } else {
                 setUser(null);
                 useAuthStore.setState({ profile: null });
-                setLoading(false);
-                setReady(true);
             }
+
+            setLoading(false);
+            setReady(true);
         });
 
-        // Safety timeout 8s
+        // Safety timeout 5s
         const timeout = setTimeout(() => {
             console.warn('[App] Safety timeout triggered');
             setLoading(false);
             setReady(true);
-        }, 8000);
+        }, 5000);
 
         return () => {
             subscription.unsubscribe();
             clearTimeout(timeout);
         };
     }, []);
+
+    // Effect 2: Khi user thay đổi → fetch profile (NGOÀI onAuthStateChange!)
+    useEffect(() => {
+        if (user) {
+            console.log('[App] User detected, fetching profile...');
+            fetchProfile(user.id);
+        }
+    }, [user]);
 
     if (!ready) {
         return (
