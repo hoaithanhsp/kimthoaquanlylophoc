@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
@@ -25,58 +25,68 @@ import StudentApproval from './pages/StudentApproval';
 function App() {
     const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
     const [ready, setReady] = useState(false);
+    const [profileLoading, setProfileLoading] = useState(false);
+
+    // Retry fetchProfile nếu lần đầu thất bại
+    const retryFetchProfile = useCallback(async (userId: string, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                await fetchProfile(userId);
+                const p = useAuthStore.getState().profile;
+                if (p) {
+                    console.log('[App] Profile loaded on attempt', i + 1, p);
+                    return true;
+                }
+                console.warn(`[App] Profile null on attempt ${i + 1}, retrying...`);
+                // Đợi 1s trước khi retry
+                await new Promise(r => setTimeout(r, 1000));
+            } catch (err) {
+                console.error(`[App] fetchProfile attempt ${i + 1} error:`, err);
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+        return false;
+    }, [fetchProfile]);
 
     useEffect(() => {
         console.log('[App] Setting up auth listener...');
 
-        // CHỈ dùng onAuthStateChange - không dùng getSession() vì nó bị treo
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('[App] Auth event:', event, session ? 'has session' : 'no session');
 
             if (event === 'INITIAL_SESSION') {
-                // Đây là event đầu tiên khi app load
                 if (session?.user) {
                     setUser(session.user);
-                    try {
-                        await fetchProfile(session.user.id);
-                        console.log('[App] Profile loaded:', useAuthStore.getState().profile);
-                    } catch (err) {
-                        console.error('[App] fetchProfile error:', err);
-                    }
+                    setProfileLoading(true);
+                    await retryFetchProfile(session.user.id);
+                    setProfileLoading(false);
                 }
                 setLoading(false);
                 setReady(true);
-                console.log('[App] Ready! isTeacher:', useAuthStore.getState().profile?.role === 'teacher');
+                console.log('[App] Ready! profile:', useAuthStore.getState().profile);
             } else if (event === 'SIGNED_IN') {
                 setUser(session!.user);
-                try {
-                    await fetchProfile(session!.user.id);
-                    console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
-                } catch (err) {
-                    console.error('[App] fetchProfile error on sign in:', err);
-                }
-                if (!ready) {
-                    setLoading(false);
-                    setReady(true);
-                }
+                setProfileLoading(true);
+                await retryFetchProfile(session!.user.id);
+                setProfileLoading(false);
+                setLoading(false);
+                setReady(true);
+                console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
             } else if (event === 'SIGNED_OUT') {
                 setUser(null);
                 useAuthStore.setState({ profile: null });
-                if (!ready) {
-                    setLoading(false);
-                    setReady(true);
-                }
-            }
-        });
-
-        // Safety timeout 3s
-        const timeout = setTimeout(() => {
-            if (!ready) {
-                console.warn('[App] Safety timeout triggered');
                 setLoading(false);
                 setReady(true);
             }
-        }, 3000);
+        });
+
+        // Safety timeout 10s (tăng lên để profile có thời gian load)
+        const timeout = setTimeout(() => {
+            console.warn('[App] Safety timeout triggered');
+            setProfileLoading(false);
+            setLoading(false);
+            setReady(true);
+        }, 10000);
 
         return () => {
             subscription.unsubscribe();
@@ -84,7 +94,8 @@ function App() {
         };
     }, []);
 
-    if (!ready) {
+    // Đang load app
+    if (!ready || profileLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
@@ -108,9 +119,42 @@ function App() {
         );
     }
 
-    const isTeacher = profile?.role === 'teacher';
-    const studentStatus = profile?.status || 'approved';
-    console.log('[App] Rendering, isTeacher:', isTeacher, 'status:', studentStatus, 'profile:', profile);
+    // Đã đăng nhập nhưng profile chưa load được → hiển thị loading + nút retry
+    if (!profile) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4">
+                <div className="text-center glass-strong rounded-2xl p-8 max-w-sm">
+                    <div className="text-4xl mb-4">⚠️</div>
+                    <h2 className="text-lg font-bold text-gray-800 mb-2">Không thể tải hồ sơ</h2>
+                    <p className="text-sm text-gray-500 mb-6">
+                        Không thể kết nối đến máy chủ. Vui lòng thử lại.
+                    </p>
+                    <div className="space-y-3">
+                        <button
+                            onClick={async () => {
+                                setProfileLoading(true);
+                                await retryFetchProfile(user.id);
+                                setProfileLoading(false);
+                            }}
+                            className="w-full py-3 bg-gradient-to-r from-flame-500 to-flame-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                        >
+                            Thử lại
+                        </button>
+                        <button
+                            onClick={() => useAuthStore.getState().signOut()}
+                            className="w-full py-2.5 text-sm text-gray-500 hover:text-red-500 transition-colors"
+                        >
+                            Đăng xuất
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const isTeacher = profile.role === 'teacher';
+    const studentStatus = profile.status || 'approved';
+    console.log('[App] Rendering, isTeacher:', isTeacher, 'status:', studentStatus);
 
     // Student chưa được duyệt
     if (!isTeacher && studentStatus !== 'approved') {
@@ -155,3 +199,4 @@ function App() {
 }
 
 export default App;
+
