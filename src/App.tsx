@@ -22,6 +22,7 @@ import StudentRewards from './pages/StudentRewards';
 import PendingApproval from './pages/PendingApproval';
 import StudentApproval from './pages/StudentApproval';
 import AuthorPage from './pages/AuthorPage';
+import ToolsPage from './pages/ToolsPage';
 
 function App() {
     const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
@@ -150,6 +151,7 @@ function App() {
                             <Route path="settings" element={<Settings />} />
                             <Route path="approval" element={<StudentApproval />} />
                             <Route path="author" element={<AuthorPage />} />
+                            <Route path="tools" element={<ToolsPage />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Route>
                     ) : (
