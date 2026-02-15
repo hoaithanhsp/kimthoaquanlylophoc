@@ -21,47 +21,66 @@ import StudentDashboard from './pages/StudentDashboard';
 import StudentRewards from './pages/StudentRewards';
 
 function App() {
-    const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore();
-    const [initializing, setInitializing] = useState(true);
+    const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        // Kiểm tra session hiện tại
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
+        let mounted = true;
+
+        async function init() {
             try {
-                if (session?.user) {
+                const { data: { session } } = await supabase.auth.getSession();
+                console.log('getSession result:', session ? 'has session' : 'no session');
+                if (session?.user && mounted) {
                     setUser(session.user);
                     await fetchProfile(session.user.id);
+                    console.log('Profile loaded, user role:', useAuthStore.getState().profile?.role);
                 }
             } catch (err) {
-                console.error('Error during initial auth:', err);
+                console.error('Init error:', err);
             } finally {
-                setLoading(false);
-                setInitializing(false);
+                if (mounted) {
+                    setLoading(false);
+                    setReady(true);
+                    console.log('App ready!');
+                }
             }
-        }).catch((err) => {
-            console.error('getSession failed:', err);
-            setLoading(false);
-            setInitializing(false);
-        });
+        }
+
+        init();
 
         // Lắng nghe thay đổi auth
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            console.log('Auth state changed:', _event);
             try {
                 if (session?.user) {
                     setUser(session.user);
                     await fetchProfile(session.user.id);
                 } else {
                     setUser(null);
+                    useAuthStore.setState({ profile: null });
                 }
             } catch (err) {
-                console.error('Error during auth change:', err);
+                console.error('Auth change error:', err);
             }
         });
 
-        return () => subscription.unsubscribe();
+        // Safety timeout - nếu sau 5s vẫn chưa ready thì force ready
+        const timeout = setTimeout(() => {
+            if (!useAuthStore.getState().loading) return;
+            console.warn('Safety timeout: forcing app ready');
+            setLoading(false);
+            setReady(true);
+        }, 5000);
+
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+            clearTimeout(timeout);
+        };
     }, []);
 
-    if (initializing || loading) {
+    if (!ready) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
