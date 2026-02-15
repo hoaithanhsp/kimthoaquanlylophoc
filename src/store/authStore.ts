@@ -25,24 +25,31 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     fetchProfile: async (userId: string) => {
         try {
+            console.log('[fetchProfile] Calling get_my_profile RPC...');
             // Dùng RPC function có SECURITY DEFINER để bypass RLS
             const { data, error } = await supabase.rpc('get_my_profile');
-            console.log('fetchProfile RPC result:', { data, error, userId });
+            console.log('[fetchProfile] RPC result:', { data, error, userId });
             if (error) {
-                console.error('fetchProfile RPC error:', error);
+                console.error('[fetchProfile] RPC error:', error.message);
                 // Fallback: thử query trực tiếp
+                console.log('[fetchProfile] Trying fallback query...');
                 const { data: fallbackData, error: fallbackError } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', userId)
                     .maybeSingle();
-                console.log('fetchProfile fallback:', { fallbackData, fallbackError });
-                set({ profile: fallbackData as Profile | null });
+                console.log('[fetchProfile] Fallback result:', { fallbackData, fallbackError });
+                if (fallbackError) {
+                    console.error('[fetchProfile] Fallback error:', fallbackError.message);
+                    set({ profile: null });
+                } else {
+                    set({ profile: fallbackData as Profile | null });
+                }
             } else {
                 set({ profile: data as Profile | null });
             }
         } catch (err) {
-            console.error('fetchProfile exception:', err);
+            console.error('[fetchProfile] Exception:', err);
             set({ profile: null });
         }
     },
