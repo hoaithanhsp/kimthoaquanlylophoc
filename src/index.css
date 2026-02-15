@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   App Quản lý Lớp học - Global Styles
+   ============================================ */
+
+/* Font */
+* {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Scrollbar custom */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Background gradient */
+body {
+  background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 25%, #fecaca 50%, #e9d5ff 75%, #bfdbfe 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Glassmorphism */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .glass-dark {
+    background: rgba(30, 30, 30, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+/* Military badge styles */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Stat card gradient borders */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #FF6B35, #FFD700, #4A5D23);
+}
+
+/* Points animation */
+.points-positive {
+  color: #059669;
+  animation: points-float 1.5s ease-out forwards;
+}
+.points-negative {
+  color: #dc2626;
+  animation: points-float 1.5s ease-out forwards;
+}
+
+@keyframes points-float {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
+
+/* Progress bar */
+.progress-bar {
+  background: linear-gradient(90deg, #FF6B35, #FFD700);
+  border-radius: 9999px;
+  transition: width 0.5s ease-out;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Toast styles */
+.toast-enter {
+  animation: toast-slide-in 0.3s ease-out forwards;
+}
+.toast-exit {
+  animation: toast-slide-out 0.3s ease-in forwards;
+}
+
+@keyframes toast-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Hover card effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar active indicator */
+.nav-active {
+  position: relative;
+}
+.nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: #FF6B35;
+  border-radius: 0 3px 3px 0;
+}

@@ -1,0 +1,361 @@
+# 📋 Prompt cho AI Studio - Tạo App Quản lý Lớp học
+
+
+> **Hướng dẫn:** Copy toàn bộ nội dung bên dưới và paste vào AI Studio (Google AI Studio, Claude, hoặc ChatGPT) để tạo app
+
+---
+
+## 📝 PROMPT CHÍNH
+
+```plaintext
+Tôi muốn tạo một ứng dụng web quản lý lớp học với hệ thống gamification sử dụng cấp bậc quân đội Việt Nam. 
+
+YÊU CẦU CÔNG NGHỆ:
+- Frontend: React.js với Vite
+- Backend: Google Apps Script
+- Database: Google Sheets (9 sheets)
+- Styling: CSS thuần với biến CSS
+- Icons: Lucide React
+- HTTP Client: Axios
+
+TÍNH NĂNG CHÍNH:
+
+1. DASHBOARD (Trang chủ)
+   - Hiển thị tổng số học sinh, điểm trung bình, số nhóm
+   - Biểu đồ phân bố cấp bậc (10 cấp từ Binh nhì → Thiếu tá)
+   - Top 5 học sinh có điểm cao nhất
+   - Top 3 nhóm xuất sắc
+
+2. QUẢN LÝ HỌC SINH
+   - Danh sách học sinh với avatar, tên, cấp bậc, điểm
+   - Thêm/sửa/xóa học sinh
+   - Hiển thị huy hiệu cấp bậc bên cạnh tên
+   - Filter theo lớp học
+
+3. QUẢN LÝ NHÓM
+   - Tạo nhóm học tập
+   - Thêm học sinh vào nhóm
+   - Tính điểm nhóm tự động (tổng điểm các thành viên)
+   - Xếp hạng nhóm
+
+4. QUẢN LÝ ĐIỂM
+   - Cộng điểm theo tiêu chí (trả lời đúng, hoàn thành bài tập...)
+   - Trừ điểm (vi phạm nội quy, không làm bài...)
+   - Hệ số nhân điểm tự động theo cấp bậc
+   - Lịch sử cộng/trừ điểm chi tiết
+
+5. CỬA HÀNG ĐỔI QUÀ
+   - Danh sách phần thưởng với giá điểm
+   - Học sinh dùng điểm để đổi quà
+   - Lịch sử đổi quà
+   - Trừ điểm tự động khi đổi
+
+6. BÁO CÁO & THỐNG KÊ
+   - Biểu đồ tiến độ học sinh theo thời gian
+   - Xuất báo cáo Excel
+   - Thống kê theo lớp, nhóm, cá nhân
+
+7. CÀI ĐẶT
+   - Quản lý tiêu chí cộng/trừ điểm
+   - Cấu hình cấp bậc và điểm yêu cầu
+   - Quản lý phần thưởng
+
+HỆ THỐNG CẤP BẬC QUÂN ĐỘI VIỆT NAM (10 cấp):
+
+| Cấp bậc    | Điểm tối thiểu | Hệ số nhân | Icon |
+|------------|----------------|------------|------|
+| Binh nhì   | 0              | 1.0        | 🎖️   |
+| Binh nhất  | 50             | 1.1        | 🎖️   |
+| Hạ sĩ      | 120            | 1.2        | 🏅   |
+| Trung sĩ   | 200            | 1.3        | 🏅   |
+| Thượng sĩ  | 300            | 1.5        | 🏅   |
+| Thiếu úy   | 450            | 1.7        | 🎗️   |
+| Trung úy   | 650            | 2.0        | 🎗️   |
+| Thượng úy  | 900            | 2.3        | 🎗️   |
+| Đại úy     | 1200           | 2.5        | 🥇   |
+| Thiếu tá   | 1600           | 3.0        | ⭐   |
+
+CẤU TRÚC DATABASE (Google Sheets - 9 sheets):
+
+1. Classes: class_id, class_name, teacher_name, school_year, is_active
+2. Students: student_id, class_id, full_name, gender, rank, total_points, current_multiplier, avatar_url, created_at, is_active
+3. Groups: group_id, class_id, group_name, total_points, member_count, created_at, is_active
+4. Group_Members: group_id, student_id, student_points, joined_at
+5. Point_History: history_id, student_id, criteria_id, base_points, multiplier, final_points, created_at, note, created_by
+6. Criteria: criteria_id, class_id, name, base_points, type (positive/negative), icon, is_active
+7. Ranks: rank_id, rank_name, min_points, multiplier, icon, color, description
+8. Rewards: reward_id, class_id, name, required_points, icon, stock, is_active
+9. Reward_History: exchange_id, student_id, reward_id, points_spent, exchanged_at, status, note
+
+GOOGLE APPS SCRIPT API ENDPOINTS:
+
+GET:
+- /exec?path=classes - Lấy danh sách lớp
+- /exec?path=students&class_id=CLS001 - Lấy học sinh theo lớp
+- /exec?path=groups&class_id=CLS001 - Lấy nhóm theo lớp
+- /exec?path=criteria&class_id=CLS001 - Lấy tiêu chí
+- /exec?path=ranks - Lấy cấp bậc
+- /exec?path=rewards&class_id=CLS001 - Lấy phần thưởng
+- /exec?path=dashboard&class_id=CLS001 - Dữ liệu dashboard
+- /exec?path=top_students&class_id=CLS001&limit=5 - Top học sinh
+- /exec?path=top_groups&class_id=CLS001&limit=3 - Top nhóm
+
+POST (JSON body):
+- action: add_student - Thêm học sinh
+- action: update_student - Cập nhật học sinh
+- action: delete_student - Xóa học sinh
+- action: add_points - Cộng điểm
+- action: subtract_points - Trừ điểm
+- action: add_group - Tạo nhóm
+- action: add_student_to_group - Thêm vào nhóm
+- action: exchange_reward - Đổi quà
+- action: add_criteria - Thêm tiêu chí
+- action: update_criteria - Cập nhật tiêu chí
+
+THIẾT KẾ GIAO DIỆN:
+
+- Màu chủ đạo: Cam đỏ (#FF6B35), Xanh quân đội (#4A5D23), Vàng huy hiệu (#FFD700)
+- Layout: Navbar trên cùng + Sidebar bên trái + Content area
+- Responsive: Desktop, Tablet, Mobile
+- Animation: Smooth transitions, hover effects
+- Typography: Roboto/Inter cho text, font đậm cho tiêu đề
+
+YÊU CẦU ĐẶC BIỆT:
+
+1. Tự động cập nhật cấp bậc khi điểm đạt ngưỡng
+2. Hệ số nhân điểm áp dụng tự động theo cấp bậc hiện tại
+3. Kiểm tra đủ điểm trước khi cho đổi quà
+4. Lưu lịch sử mọi thao tác (cộng/trừ điểm, đổi quà)
+5. Soft delete (is_active = false) thay vì xóa hẳn
+6. Loading states và error handling đầy đủ
+7. Toast notifications cho mọi action
+
+LOGIC NGHIỆP VỤ QUAN TRỌNG:
+
+1. Khi cộng điểm:
+   - Lấy base_points từ criteria
+   - Nhân với current_multiplier của học sinh
+   - Cộng vào total_points
+   - Kiểm tra và cập nhật rank nếu đủ điểm
+   - Lưu vào Point_History
+
+2. Khi đổi quà:
+   - Kiểm tra total_points >= required_points
+   - Trừ điểm
+   - Cập nhật rank nếu điểm giảm xuống dưới ngưỡng
+   - Lưu vào Reward_History
+
+3. Khi tính điểm nhóm:
+   - Tổng điểm của tất cả thành viên trong nhóm
+   - Cập nhật tự động khi có thay đổi điểm cá nhân
+
+STRUCTURE CODE YÊU CẦU:
+
+Frontend React:
+```
+
+src/\
+├── components/\
+│ ├── Navbar.jsx\
+│ ├── Sidebar.jsx\
+│ ├── Dashboard.jsx\
+│ ├── StudentList.jsx\
+│ ├── GroupManagement.jsx\
+│ ├── PointManagement.jsx\
+│ ├── RewardShop.jsx\
+│ ├── Reports.jsx\
+│ └── Settings.jsx\
+├── services/\
+│ └── api.js\
+├── utils/\
+│ └── helpers.js\
+├── App.jsx\
+├── App.css\
+└── main.jsx
+
+```plaintext
+
+Backend Apps Script:
+```
+
+[Code.gs](http://Code.gs) (single file với tất cả functions)
+
+```plaintext
+
+HÃY TẠO:
+
+1. ✅ File Code.gs hoàn chỉnh cho Google Apps Script
+2. ✅ Tất cả React components với code đầy đủ
+3. ✅ File CSS với styling hoàn chỉnh
+4. ✅ API service với error handling
+5. ✅ Hướng dẫn setup từng bước chi tiết
+
+YÊU CẦU OUTPUT:
+
+- Code phải chạy được ngay, không cần chỉnh sửa
+- Comment tiếng Việt giải thích logic
+- Xử lý lỗi đầy đủ
+- Responsive design
+- Clean code, dễ maintain
+
+BẮT ĐẦU TẠO APP NGAY!
+```
+
+---
+
+## 🎯 CÁCH SỬ DỤNG
+
+### Bước 1: Copy prompt
+
+Chọn toàn bộ nội dung trong khung code trên (từ "Tôi muốn tạo..." đến "BẮT ĐẦU TẠO APP NGAY !")
+
+### Bước 2 : Paste vào AI Studio
+
+**Option A: Google AI Studio**
+
+1. Truy cập: <https://aistudio.google.com>
+
+2. Tạo New prompt
+
+3. Paste prompt vào
+
+4. Chọn model: Gemini 2.0 Flash Experimental
+
+5. Click "Run"
+
+**Option B: Claude (Anthropic)**
+
+1. Truy cập: <https://claude.ai>
+
+2. Tạo conversation mới
+
+3. Paste prompt vào
+
+4. Gửi message
+
+**Option C: ChatGPT (OpenAI)**
+
+1. Truy cập: <https://chat.openai.com>
+
+2. Chọn GPT-4 hoặc GPT-4 Turbo
+
+3. Paste prompt vào
+
+4. Gửi message
+
+### Bước 3: Nhận code
+
+AI sẽ generate:
+
+- ✅ [Code.gs](http://Code.gs) (Google Apps Script) - Copy vào Apps Script Editor
+
+- ✅ Tất cả React components - Copy vào project React
+
+- ✅ CSS styling - Copy vào App.css
+
+- ✅ API service - Copy vào services/api.js
+
+### Bước 4: Triển khai
+
+Làm theo hướng dẫn trong tài liệu **"4. Hướng dẫn Triển khai Đầy đủ"**
+
+---
+
+## 💡 MẸO QUAN TRỌNG
+
+### Nếu AI không generate đủ code :
+
+Hỏi tiếp:
+
+```plaintext
+Tiếp tục tạo các components còn lại: 
+- StudentList.jsx
+- GroupManagement.jsx  
+- PointManagement.jsx
+- RewardShop.jsx
+- Reports.jsx
+- Settings.jsx
+```
+
+### Nếu muốn tùy chỉnh :
+
+Thêm vào prompt :
+
+```plaintext
+Thêm yêu cầu:
+- Thay đổi màu sắc chủ đạo thành [màu bạn muốn]
+- Thêm tính năng [tính năng mới]
+- Sử dụng [thư viện khác] thay vì Lucide React
+```
+
+### Nếu code bị lỗi:
+
+Hỏi AI:
+
+```plaintext
+Code bị lỗi tại dòng X với message: [error message]
+Hãy sửa lỗi này.
+```
+
+---
+
+## 🚀 PROMPT NGẮN GỌN (Nếu AI đã biết context)
+
+Nếu bạn đã chat với AI về project này trước đó, dùng prompt ngắn :
+
+```plaintext
+Tạo app quản lý lớp học với:
+- React + Vite frontend
+- Google Apps Script backend  
+- Google Sheets database (9 sheets)
+- 10 cấp bậc quân đội VN (Binh nhì → Thiếu tá)
+- Tính năng: Dashboard, Quản lý học sinh/nhóm, Cộng/trừ điểm với hệ số nhân, Đổi quà, Báo cáo
+- Tự động cập nhật rank khi đủ điểm
+- Code đầy đủ, chạy được ngay
+
+Tham khảo cấu trúc database và API endpoints tôi đã cung cấp trước đó.
+```
+
+---
+
+## 📋 CHECKLIST SAU KHI NHẬN CODE TỪ AI
+
+- [ ]  Kiểm tra [Code.gs](http://Code.gs) có đầy đủ tất cả API endpoints
+
+- [ ]  Kiểm tra React components có đầy đủ 7 components chính
+
+- [ ]  Kiểm tra CSS có responsive design
+
+- [ ]  Kiểm tra API service có error handling
+
+- [ ]  Kiểm tra logic cộng điểm có nhân hệ số
+
+- [ ]  Kiểm tra logic đổi quà có kiểm tra đủ điểm
+
+- [ ]  Kiểm tra function updateStudentRank() hoạt động đúng
+
+- [ ]  Test code trên localhost trước khi deploy
+
+---
+
+## 🎉 KẾT QUẢ MONG ĐỢI
+
+Sau khi paste prompt vào AI Studio, bạn sẽ nhận được :
+
+1. [**Code.gs**](http://Code.gs) (~800 dòng) - Backend hoàn chỉnh
+
+2. **React Components** (~2000 dòng) - Frontend đầy đủ tính năng
+
+3. **CSS** (~500 dòng) - Styling đẹp, responsive
+
+4. **Hướng dẫn setup** - Chi tiết từng bước
+
+**Thời gian AI generate:** 2-5 phút
+
+**Thời gian bạn setup:** 15-30 phút
+
+**Tổng thời gian có app chạy được:** < 1 giờ! 🚀
+
+---
+
+*Tài liệu được tạo bởi YouMind AI - 5/2/2026*
