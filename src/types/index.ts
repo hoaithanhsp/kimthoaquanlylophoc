@@ -26,6 +26,8 @@ export interface Student {
     user_id: string | null;
     full_name: string;
     gender: 'male' | 'female' | 'other';
+    student_code: string | null;
+    birthday: string | null;
     total_points: number;
     current_rank: string;
     current_multiplier: number;
