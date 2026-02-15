@@ -27,21 +27,34 @@ function App() {
     useEffect(() => {
         // Kiểm tra session hiện tại
         supabase.auth.getSession().then(async ({ data: { session } }) => {
-            if (session?.user) {
-                setUser(session.user);
-                await fetchProfile(session.user.id);
+            try {
+                if (session?.user) {
+                    setUser(session.user);
+                    await fetchProfile(session.user.id);
+                }
+            } catch (err) {
+                console.error('Error during initial auth:', err);
+            } finally {
+                setLoading(false);
+                setInitializing(false);
             }
+        }).catch((err) => {
+            console.error('getSession failed:', err);
             setLoading(false);
             setInitializing(false);
         });
 
         // Lắng nghe thay đổi auth
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (session?.user) {
-                setUser(session.user);
-                await fetchProfile(session.user.id);
-            } else {
-                setUser(null);
+            try {
+                if (session?.user) {
+                    setUser(session.user);
+                    await fetchProfile(session.user.id);
+                } else {
+                    setUser(null);
+                }
+            } catch (err) {
+                console.error('Error during auth change:', err);
             }
         });
 
