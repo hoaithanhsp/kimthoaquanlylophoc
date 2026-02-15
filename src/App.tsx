@@ -25,56 +25,58 @@ function App() {
     const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        let mounted = true;
+        console.log('[App] Setting up auth listener...');
 
-        async function init() {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                console.log('getSession result:', session ? 'has session' : 'no session');
-                if (session?.user && mounted) {
-                    setUser(session.user);
-                    await fetchProfile(session.user.id);
-                    console.log('Profile loaded, user role:', useAuthStore.getState().profile?.role);
-                }
-            } catch (err) {
-                console.error('Init error:', err);
-            } finally {
-                if (mounted) {
-                    setLoading(false);
-                    setReady(true);
-                    console.log('App ready!');
-                }
-            }
-        }
+        // CHỈ dùng onAuthStateChange - không dùng getSession() vì nó bị treo
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('[App] Auth event:', event, session ? 'has session' : 'no session');
 
-        init();
-
-        // Lắng nghe thay đổi auth
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            console.log('Auth state changed:', _event);
-            try {
+            if (event === 'INITIAL_SESSION') {
+                // Đây là event đầu tiên khi app load
                 if (session?.user) {
                     setUser(session.user);
-                    await fetchProfile(session.user.id);
-                } else {
-                    setUser(null);
-                    useAuthStore.setState({ profile: null });
+                    try {
+                        await fetchProfile(session.user.id);
+                        console.log('[App] Profile loaded:', useAuthStore.getState().profile);
+                    } catch (err) {
+                        console.error('[App] fetchProfile error:', err);
+                    }
                 }
-            } catch (err) {
-                console.error('Auth change error:', err);
+                setLoading(false);
+                setReady(true);
+                console.log('[App] Ready! isTeacher:', useAuthStore.getState().profile?.role === 'teacher');
+            } else if (event === 'SIGNED_IN') {
+                setUser(session!.user);
+                try {
+                    await fetchProfile(session!.user.id);
+                    console.log('[App] Signed in, profile:', useAuthStore.getState().profile);
+                } catch (err) {
+                    console.error('[App] fetchProfile error on sign in:', err);
+                }
+                if (!ready) {
+                    setLoading(false);
+                    setReady(true);
+                }
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                useAuthStore.setState({ profile: null });
+                if (!ready) {
+                    setLoading(false);
+                    setReady(true);
+                }
             }
         });
 
-        // Safety timeout - nếu sau 5s vẫn chưa ready thì force ready
+        // Safety timeout 3s
         const timeout = setTimeout(() => {
-            if (!useAuthStore.getState().loading) return;
-            console.warn('Safety timeout: forcing app ready');
-            setLoading(false);
-            setReady(true);
-        }, 5000);
+            if (!ready) {
+                console.warn('[App] Safety timeout triggered');
+                setLoading(false);
+                setReady(true);
+            }
+        }, 3000);
 
         return () => {
-            mounted = false;
             subscription.unsubscribe();
             clearTimeout(timeout);
         };
@@ -105,6 +107,7 @@ function App() {
     }
 
     const isTeacher = profile?.role === 'teacher';
+    console.log('[App] Rendering, isTeacher:', isTeacher, 'profile:', profile);
 
     return (
         <BrowserRouter>
