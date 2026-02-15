@@ -13,18 +13,26 @@ export default function Dashboard() {
 
     useEffect(() => {
         loadData();
+        // Safety timeout: nếu 5s chưa load xong thì tắt spinner
+        const timeout = setTimeout(() => setLoading(false), 5000);
+        return () => clearTimeout(timeout);
     }, []);
 
     async function loadData() {
-        const [stuRes, grpRes, rankRes] = await Promise.all([
-            supabase.from('students').select('*').eq('is_active', true).order('total_points', { ascending: false }),
-            supabase.from('groups').select('*').eq('is_active', true).order('total_points', { ascending: false }),
-            supabase.from('ranks').select('*').order('sort_order'),
-        ]);
-        setStudents((stuRes.data || []) as Student[]);
-        setGroups((grpRes.data || []) as Group[]);
-        setRanks((rankRes.data || []) as Rank[]);
-        setLoading(false);
+        try {
+            const [stuRes, grpRes, rankRes] = await Promise.all([
+                supabase.from('students').select('*').eq('is_active', true).order('total_points', { ascending: false }),
+                supabase.from('groups').select('*').eq('is_active', true).order('total_points', { ascending: false }),
+                supabase.from('ranks').select('*').order('sort_order'),
+            ]);
+            setStudents((stuRes.data || []) as Student[]);
+            setGroups((grpRes.data || []) as Group[]);
+            setRanks((rankRes.data || []) as Rank[]);
+        } catch (err) {
+            console.error('[Dashboard] Load error:', err);
+        } finally {
+            setLoading(false);
+        }
     }
 
     if (loading) {
@@ -206,8 +214,8 @@ export default function Dashboard() {
                             <div
                                 key={group.id}
                                 className={`rounded-2xl p-5 text-center hover-lift ${idx === 0 ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200' :
-                                        idx === 1 ? 'bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200' :
-                                            'bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200'
+                                    idx === 1 ? 'bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200' :
+                                        'bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200'
                                     }`}
                             >
                                 <div
