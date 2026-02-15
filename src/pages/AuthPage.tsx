@@ -29,7 +29,7 @@ export default function AuthPage() {
                     options: { data: { full_name: fullName } },
                 });
                 if (error) throw error;
-                setSuccess('Đăng ký thành công! Kiểm tra email để xác nhận tài khoản.');
+                setSuccess('Đăng ký thành công! Tài khoản của bạn đang chờ giáo viên phê duyệt. Vui lòng đăng nhập để theo dõi trạng thái.');
             }
         } catch (err: any) {
             setError(err.message || 'Đã xảy ra lỗi');

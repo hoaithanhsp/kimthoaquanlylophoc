@@ -1,14 +1,16 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Users, UsersRound, Zap,
-    Gift, BarChart3, Settings, LogOut, Shield, Menu, X,
+    Gift, BarChart3, Settings, LogOut, Shield, Menu, X, UserCheck,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import NotificationBell from './NotificationBell';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Tổng quan' },
+    { to: '/approval', icon: UserCheck, label: 'Phê duyệt HS', hasBadge: true },
     { to: '/students', icon: Users, label: 'Học sinh' },
     { to: '/groups', icon: UsersRound, label: 'Nhóm' },
     { to: '/points', icon: Zap, label: 'Điểm số' },
@@ -20,6 +22,31 @@ const navItems = [
 export default function TeacherLayout() {
     const { profile, signOut } = useAuthStore();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        loadPendingCount();
+        // Realtime subscribe for new registrations
+        const channel = supabase
+            .channel('pending-count-watch')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'profiles',
+            }, () => {
+                loadPendingCount();
+            })
+            .subscribe();
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    async function loadPendingCount() {
+        try {
+            const { data } = await supabase.rpc('get_pending_students');
+            const students = (data || []) as any[];
+            setPendingCount(students.filter((s: any) => s.status === 'pending').length);
+        } catch { setPendingCount(0); }
+    }
 
     return (
         <div className="flex min-h-screen">
@@ -69,7 +96,12 @@ export default function TeacherLayout() {
                             }
                         >
                             <item.icon className="w-5 h-5" />
-                            {item.label}
+                            <span className="flex-1">{item.label}</span>
+                            {(item as any).hasBadge && pendingCount > 0 && (
+                                <span className="min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                                    {pendingCount > 9 ? '9+' : pendingCount}
+                                </span>
+                            )}
                         </NavLink>
                     ))}
                 </nav>

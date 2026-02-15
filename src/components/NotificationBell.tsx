@@ -68,6 +68,9 @@ export default function NotificationBell() {
         points_subtracted: '📉',
         reward_exchanged: '🎁',
         rank_up: '🎖️',
+        student_registered: '📝',
+        account_approved: '✅',
+        account_rejected: '❌',
         info: 'ℹ️',
     };
 

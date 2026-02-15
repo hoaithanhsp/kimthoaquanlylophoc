@@ -19,6 +19,8 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentRewards from './pages/StudentRewards';
+import PendingApproval from './pages/PendingApproval';
+import StudentApproval from './pages/StudentApproval';
 
 function App() {
     const { user, profile, setUser, setLoading, fetchProfile } = useAuthStore();
@@ -107,7 +109,19 @@ function App() {
     }
 
     const isTeacher = profile?.role === 'teacher';
-    console.log('[App] Rendering, isTeacher:', isTeacher, 'profile:', profile);
+    const studentStatus = profile?.status || 'approved';
+    console.log('[App] Rendering, isTeacher:', isTeacher, 'status:', studentStatus, 'profile:', profile);
+
+    // Student chưa được duyệt
+    if (!isTeacher && studentStatus !== 'approved') {
+        return (
+            <BrowserRouter>
+                <ToastProvider>
+                    <PendingApproval status={studentStatus as 'pending' | 'rejected'} />
+                </ToastProvider>
+            </BrowserRouter>
+        );
+    }
 
     return (
         <BrowserRouter>
@@ -123,6 +137,7 @@ function App() {
                             <Route path="rewards" element={<RewardShop />} />
                             <Route path="reports" element={<Reports />} />
                             <Route path="settings" element={<Settings />} />
+                            <Route path="approval" element={<StudentApproval />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Route>
                     ) : (

@@ -5,6 +5,7 @@ export interface Profile {
     full_name: string;
     phone: string;
     role: 'teacher' | 'student';
+    status: 'pending' | 'approved' | 'rejected';
     created_at: string;
     updated_at: string;
 }
