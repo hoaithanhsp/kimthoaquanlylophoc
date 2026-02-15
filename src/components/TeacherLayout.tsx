@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Users, UsersRound, Zap,
-    Gift, BarChart3, Settings, LogOut, Shield, Menu, X, UserCheck,
+    Gift, BarChart3, Settings, LogOut, Shield, Menu, X, UserCheck, User,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import NotificationBell from './NotificationBell';
@@ -17,6 +17,7 @@ const navItems = [
     { to: '/rewards', icon: Gift, label: 'Đổi quà' },
     { to: '/reports', icon: BarChart3, label: 'Báo cáo' },
     { to: '/settings', icon: Settings, label: 'Cài đặt' },
+    { to: '/author', icon: User, label: 'Tác giả' },
 ];
 
 export default function TeacherLayout() {
