@@ -3,7 +3,7 @@ import { Users, Trophy, UsersRound, TrendingUp, Crown, Medal } from 'lucide-reac
 import { supabase } from '../lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Student, Group, Rank } from '../types';
-import { formatPoints, getRankInfo, getAvatarUrl } from '../lib/helpers';
+import { formatPoints, getRankInfo, getAvatarUrl, DEFAULT_RANKS } from '../lib/helpers';
 
 export default function Dashboard() {
     const [students, setStudents] = useState<Student[]>([]);
@@ -48,9 +48,14 @@ export default function Dashboard() {
     const avgPoints = totalStudents > 0 ? Math.round(students.reduce((s, st) => s + st.total_points, 0) / totalStudents) : 0;
     const totalGroups = groups.length;
 
+    // Fallback: nếu DB trống thì dùng DEFAULT_RANKS
+    const displayRanks: Rank[] = ranks.length > 0
+        ? ranks
+        : DEFAULT_RANKS.map((r, i) => ({ ...r, id: `default-${i}` }));
+
     // Phân bố cấp bậc
-    const rankDistribution = ranks.map(rank => {
-        const nextRank = ranks.find(r => r.sort_order === rank.sort_order + 1);
+    const rankDistribution = displayRanks.map(rank => {
+        const nextRank = displayRanks.find(r => r.sort_order === rank.sort_order + 1);
         const count = students.filter(s => {
             const pts = s.total_points;
             if (nextRank) return pts >= rank.min_points && pts < nextRank.min_points;
