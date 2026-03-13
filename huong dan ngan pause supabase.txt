@@ -1,0 +1,700 @@
+# 🤖 Hướng Dẫn Setup GitHub Actions - Ngăn Supabase Auto-Pause
+
+## 📌 Tổng Quan
+
+**Vấn đề:** Supabase Free Plan tự động pause project sau 7 ngày không hoạt động.
+
+**Giải pháp:** Sử dụng GitHub Actions để tự động "ping" database 2 lần/tuần (mỗi 3-4 ngày), đảm bảo project luôn active.
+
+**Chi phí:**
+
+- ✅ **100% MIỄN PHÍ**
+
+- GitHub Free plan cho 2,000 phút/tháng
+
+- Workflow này chỉ tốn ~4-5 phút/tháng (0.2% quota)
+
+**Thời gian setup:** 5-10 phút
+
+---
+
+## 🎯 Cách Hoạt Động
+
+```plaintext
+GitHub Actions (chạy mỗi 3 ngày)
+    ↓
+Kết nối đến Supabase
+    ↓
+Thực hiện query đơn giản (SELECT 1 row)
+    ↓
+Supabase ghi nhận hoạt động → Project vẫn ACTIVE ✅
+```
+
+---
+
+## 📋 Yêu Cầu Trước Khi Bắt Đầu
+
+- [x]  Có tài khoản GitHub
+
+- [x]  Có project Supabase đang chạy
+
+- [x]  Biết cách tạo repository trên GitHub (hoặc dùng repo hiện có)
+
+---
+
+## 🚀 BƯỚC 1 : Lấy Thông Tin Supabase
+
+### 1.1. Lấy Supabase URL
+
+1. Vào [Supabase Dashboard](https://supabase.com/dashboard)
+
+2. Chọn project của bạn
+
+3. Vào **Settings** → **API**
+
+4. Copy **Project URL** (dạng `https://xxxxx.supabase.co`)
+
+**Lưu lại:** `SUPABASE_URL`
+
+---
+
+### 1.2. Lấy Service Role Key
+
+1. Vẫn ở trang **Settings** → **API**
+
+2. Tìm mục **Project API keys**
+
+3. Copy **service_role** key (⚠️ KHÔNG phải anon key)
+
+**⚠️ LƯU Ý QUAN TRỌNG:**
+
+- Service role key có quyền admin, **KHÔNG BAO GIỜ** commit trực tiếp vào code
+
+- Chỉ lưu vào GitHub Secrets (bước 3)
+
+**Lưu lại:** `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+### 1.3. Tạo Bảng Keep-Alive (Khuyên dùng)
+
+Để tránh query vào bảng quan trọng, tạo 1 bảng riêng cho việc ping :
+
+1. Vào **SQL Editor** trong Supabase Dashboard
+
+2. Paste đoạn SQL này :
+
+```sql
+-- Tạo bảng keep_alive
+CREATE TABLE IF NOT EXISTS keep_alive (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  last_ping TIMESTAMP DEFAULT NOW()
+);
+
+-- Insert dòng dữ liệu mẫu
+INSERT INTO keep_alive (name) 
+VALUES ('github-actions-ping')
+ON CONFLICT (name) DO NOTHING;
+```
+
+3. Click **Run** để thực thi
+
+✅ **Xong!** Bây giờ bạn có bảng `keep_alive` với 1 dòng dữ liệu.
+
+---
+
+## 🐙 BƯỚC 2: Setup GitHub Repository
+
+### 2.1. Tạo Repository Mới (hoặc dùng repo hiện có)
+
+**Cách 1: Tạo repo mới**
+
+1. Vào [GitHub](https://github.com)
+
+2. Click **New repository**
+
+3. Đặt tên : `supabase-keep-alive` (hoặc tên bạn thích)
+
+4. Chọn **Public** hoặc **Private** (đều được)
+
+5. Click **Create repository**
+
+**Cách 2 : Dùng repo hiện có**
+
+- Nếu bạn đã có repo cho project, có thể dùng luôn (không cần tạo mới)
+
+---
+
+### 2.2. Tạo Workflow File
+
+1. Trong repo của bạn, tạo cấu trúc thư mục:
+
+```plaintext
+your-repo/
+└── .github/
+    └── workflows/
+        └── supabase-keep-alive.yml
+```
+
+2. Tạo file `.github/workflows/supabase-keep-alive.yml`
+
+**📝 Copy đoạn code này vào file :**
+
+```yaml
+name: Keep Supabase Active
+
+on:
+  schedule:
+    # Chạy vào 9:00 AM UTC mỗi thứ Hai và thứ Năm
+    - cron: '0 9 * * 1,4'
+  workflow_dispatch: # Cho phép chạy thủ công từ GitHub UI
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase client
+        run: npm install @supabase/supabase-js
+
+      - name: Ping Supabase database
+        env:
+          SUPABASE_URL: $${{ secrets.SUPABASE_URL }}$$
+          SUPABASE_SERVICE_ROLE_KEY: $${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}$$
+        run: |
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+          
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+          
+          (async () => {
+            try {
+              // Query bảng keep_alive
+              const { data, error } = await supabase
+                .from('keep_alive')
+                .select('name')
+                .eq('name', 'github-actions-ping')
+                .single();
+              
+              if (error) throw error;
+              
+              // Update timestamp
+              const { error: updateError } = await supabase
+                .from('keep_alive')
+                .update({ last_ping: new Date().toISOString() })
+                .eq('name', 'github-actions-ping');
+              
+              if (updateError) throw updateError;
+              
+              console.log('✅ Supabase ping successful at', new Date().toISOString());
+              console.log('📊 Data:', data);
+            } catch (err) {
+              console.error('❌ Error pinging Supabase:', err.message);
+              process.exit(1);
+            }
+          })();
+          "
+
+      - name: Report status
+        if: always()
+        run: |
+          if [ $${{ job.status }} == 'success' ]; then
+            echo "✅ Keep-alive ping completed successfully"
+          else
+            echo "❌ Keep-alive ping failed"
+          fi
+```
+
+---
+
+### 2.3. Giải Thích Code
+
+**Cron Schedule:**
+
+```yaml
+- cron: '0 9 * * 1,4'
+```
+
+- `0 9` = 9:00 AM
+
+- `* *` = mọi ngày trong tháng, mọi tháng
+
+- `1,4` = thứ Hai (1) và thứ Năm (4)
+
+**⏰ Tùy Chỉnh Lịch Chạy :**
+
+| Mô tả | Cron expression |
+| --- | --- |
+| Mỗi thứ 2 và thứ 5, 9 AM UTC | `0 9 * * 1,4` |
+| Mỗi 3 ngày, 12 PM UTC | `0 12 */3 * *` |
+| Mỗi Chủ nhật và Thứ tư, 6 AM UTC | `0 6 * * 0,3` |
+| Mỗi ngày, 3 AM UTC | `0 3 * * *` |
+
+**🌍 Lưu ý về Timezone:**
+
+- GitHub Actions chạy theo **UTC** (không phải giờ Việt Nam)
+
+- Việt Nam = UTC+7
+
+- Ví dụ: `0 9` UTC = 16:00 (4 PM) giờ Việt Nam
+
+---
+
+### 2.4. Commit và Push
+
+**Nếu dùng GitHub Web UI :**
+
+1. Click **Add file** → **Create new file**
+
+2. Đặt tên : `.github/workflows/supabase-keep-alive.yml`
+
+3. Paste code ở trên
+
+4. Click **Commit changes**
+
+**Nếu dùng Git command line :**
+
+```bash
+git add .github/workflows/supabase-keep-alive.yml
+git commit -m "Add Supabase keep-alive workflow"
+git push origin main
+```
+
+---
+
+## 🔐 BƯỚC 3 : Thêm GitHub Secrets
+
+GitHub Secrets giúp lưu trữ thông tin nhạy cảm (API keys) một cách an toàn.
+
+### 3.1. Vào Settings
+
+1. Vào repository của bạn trên GitHub
+
+2. Click **Settings** (tab cuối cùng)
+
+3. Trong sidebar bên trái, click **Secrets and variables** → **Actions**
+
+---
+
+### 3.2. Thêm SUPABASE_URL
+
+1. Click **New repository secret**
+
+2. **Name:** `SUPABASE_URL`
+
+3. **Secret:** Paste URL Supabase của bạn (ví dụ: `https://xxxxx.supabase.co`)
+
+4. Click **Add secret**
+
+---
+
+### 3.3. Thêm SUPABASE_SERVICE_ROLE_KEY
+
+1. Click **New repository secret** lần nữa
+
+2. **Name:** `SUPABASE_SERVICE_ROLE_KEY`
+
+3. **Secret:** Paste service role key của bạn
+
+4. Click **Add secret**
+
+---
+
+### 3.4. Kiểm Tra
+
+Bạn sẽ thấy 2 secrets:
+
+- ✅ `SUPABASE_URL`
+
+- ✅ `SUPABASE_SERVICE_ROLE_KEY`
+
+⚠️ **Lưu ý:** Sau khi thêm, bạn không thể xem lại giá trị của secret (chỉ có thể update hoặc xóa).
+
+---
+
+## ✅ BƯỚC 4: Test Workflow
+
+### 4.1. Chạy Thủ Công (Manual Trigger)
+
+Không cần đợi đến lịch tự động, test ngay :
+
+1. Vào repository trên GitHub
+
+2. Click tab **Actions**
+
+3. Chọn workflow **Keep Supabase Active** (bên trái)
+
+4. Click **Run workflow** (bên phải)
+
+5. Click nút **Run workflow** màu xanh
+
+---
+
+### 4.2. Xem Kết Quả
+
+1. Workflow sẽ chạy trong ~30-60 giây
+
+2. Click vào workflow run mới nhất
+
+3. Click vào job **ping-supabase**
+
+4. Xem logs từng step
+
+**✅ Thành công khi thấy :**
+
+```plaintext
+✅ Supabase ping successful at 2026-03-13T04:15:30.123Z
+📊 Data: { name: 'github-actions-ping' }
+✅ Keep-alive ping completed successfully
+```
+
+**❌ Lỗi thường gặp:**
+
+- `Error: Invalid API key` → Kiểm tra lại `SUPABASE_SERVICE_ROLE_KEY`
+
+- `relation "keep_alive" does not exist` → Bạn chưa tạo bảng (quay lại Bước 1.3)
+
+- `404 Not Found` → Kiểm tra lại `SUPABASE_URL`
+
+---
+
+### 4.3. Kiểm Tra Trong Supabase
+
+1. Vào Supabase Dashboard
+
+2. Vào **Table Editor**
+
+3. Chọn bảng `keep_alive`
+
+4. Kiểm tra cột `last_ping` → phải có timestamp mới nhất
+
+---
+
+## 📊 BƯỚC 5: Theo Dõi Workflow
+
+### 5.1. Xem Lịch Sử Chạy
+
+1. Vào tab **Actions** trong repo
+
+2. Bạn sẽ thấy danh sách tất cả workflow runs
+
+3. Màu xanh ✅ = thành công
+
+4. Màu đỏ ❌ = thất bại
+
+---
+
+### 5.2. Nhận Email Thông Báo (Optional)
+
+GitHub sẽ tự động gửi email nếu workflow fail.
+
+**Tùy chỉnh thông báo :**
+
+1. Vào **Settings** (của tài khoản GitHub, không phải repo)
+
+2. **Notifications** → **Actions**
+
+3. Chọn:
+
+   - ✅ **Send notifications for failed workflows only** (khuyên dùng)
+
+   - hoặc tắt hẳn nếu không muốn nhận email
+
+---
+
+## 🎉 Hoàn Tất !
+
+Bây giờ GitHub Actions sẽ tự động :
+
+- ✅ Chạy mỗi thứ Hai và thứ Năm lúc 9 AM UTC (4 PM giờ VN)
+
+- ✅ Ping Supabase database
+
+- ✅ Giữ project của bạn luôn active
+
+- ✅ Không bao giờ bị pause nữa ! 🎊
+
+---
+
+## 🔧 Tùy Chỉnh Nâng Cao
+
+### Option 1 : Ping Nhiều Project Cùng Lúc
+
+Nếu bạn có nhiều Supabase project, sửa code như sau:
+
+```yaml
+- name: Ping Multiple Supabase Projects
+  env:
+    SUPABASE_URL_1: $${{ secrets.SUPABASE_URL_1 }}$$
+    SUPABASE_KEY_1: $${{ secrets.SUPABASE_KEY_1 }}$$
+    SUPABASE_URL_2: $${{ secrets.SUPABASE_URL_2 }}$$
+    SUPABASE_KEY_2: $${{ secrets.SUPABASE_KEY_2 }}$$
+  run: |
+    node -e "
+    const { createClient } = require('@supabase/supabase-js');
+    
+    const projects = [
+      { url: process.env.SUPABASE_URL_1, key: process.env.SUPABASE_KEY_1, name: 'Project 1' },
+      { url: process.env.SUPABASE_URL_2, key: process.env.SUPABASE_KEY_2, name: 'Project 2' }
+    ];
+    
+    (async () => {
+      for (const project of projects) {
+        try {
+          const supabase = createClient(project.url, project.key);
+          const { data, error } = await supabase
+            .from('keep_alive')
+            .select('name')
+            .limit(1);
+          
+          if (error) throw error;
+          console.log(\`✅ \${project.name} ping successful\`);
+        } catch (err) {
+          console.error(\`❌ \${project.name} failed:\`, err.message);
+        }
+      }
+    })();
+    "
+```
+
+Nhớ thêm secrets cho mỗi project !
+
+---
+
+### Option 2 : Ping Bảng Khác (Không Tạo Bảng Mới)
+
+Nếu không muốn tạo bảng `keep_alive`, có thể query bảng có sẵn:
+
+```javascript
+const { data, error } = await supabase
+  .from('your_existing_table') // Thay tên bảng của bạn
+  .select('id')
+  .limit(1);
+```
+
+**⚠️ Lưu ý:** Chọn bảng ít quan trọng, tránh query bảng lớn.
+
+---
+
+### Option 3 : Thêm Slack/Discord Notification
+
+Muốn nhận thông báo trên Slack/Discord khi ping thành công ?
+
+**Thêm step này vào cuối workflow :**
+
+```yaml
+- name: Send Discord Notification
+  if: success()
+  run: |
+    curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "content": "✅ Supabase keep-alive ping successful at '"$(date)"'"
+      }'
+```
+
+Cần thêm secret `DISCORD_WEBHOOK_URL`.
+
+---
+
+## ❓ Câu Hỏi Thường Gặp (FAQ)
+
+### Q1 : Workflow không chạy đúng giờ ?
+
+**A:** GitHub Actions có thể delay 5-15 phút trong giờ cao điểm. Đây là bình thường, không ảnh hưởng đến việc keep-alive (vì bạn ping mỗi 3-4 ngày).
+
+---
+
+### Q2 : Tôi có thể dùng repo private không ?
+
+**A:** Có ! GitHub Free cho phép chạy Actions trên repo private (2,000 phút/tháng).
+
+---
+
+### Q3 : Workflow có tốn tiền không ?
+
+**A:** Không, hoàn toàn miễn phí với GitHub Free plan. Bạn chỉ dùng ~4 phút/tháng (0.2% quota).
+
+---
+
+### Q4: Nếu workflow fail thì sao?
+
+**A:** GitHub sẽ gửi email thông báo. Bạn vào **Actions** tab để xem logs và debug. Thường là do :
+
+- Secret sai
+
+- Supabase project bị xóa/pause thủ công
+
+- Bảng `keep_alive` bị xóa
+
+---
+
+### Q5 : Tôi có thể tắt workflow tạm thời không ?
+
+**A:** Có ! Vào **Actions** tab → chọn workflow → click **Disable workflow** (3 chấm ở góc phải).
+
+---
+
+### Q6: Workflow có hoạt động nếu repo bị archive?
+
+**A:** Không. Nếu bạn archive repo, tất cả workflows sẽ dừng.
+
+---
+
+### Q7 : Tôi muốn chạy mỗi 2 ngày thay vì thứ 2 và thứ 5 ?
+
+**A:** Đổi cron thành :
+
+```yaml
+- cron: '0 9 */2 * *'  # Mỗi 2 ngày lúc 9 AM UTC
+```
+
+---
+
+## 🆘 Xử Lý Lỗi
+
+### Lỗi: "Error: Invalid API key"
+
+**Nguyên nhân :** Secret `SUPABASE_SERVICE_ROLE_KEY` sai hoặc chưa set.
+
+**Giải pháp:**
+
+1. Vào Supabase Dashboard → Settings → API
+
+2. Copy lại **service_role** key (KHÔNG phải anon key)
+
+3. Vào GitHub repo → Settings → Secrets → Actions
+
+4. Update secret `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+### Lỗi: "relation 'keep_alive' does not exist"
+
+**Nguyên nhân :** Chưa tạo bảng `keep_alive`.
+
+**Giải pháp:**
+
+1. Vào Supabase SQL Editor
+
+2. Chạy lại SQL ở Bước 1.3:
+
+```sql
+CREATE TABLE IF NOT EXISTS keep_alive (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  last_ping TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO keep_alive (name) 
+VALUES ('github-actions-ping')
+ON CONFLICT (name) DO NOTHING;
+```
+
+---
+
+### Lỗi: "404 Not Found"
+
+**Nguyên nhân :** `SUPABASE_URL` sai hoặc project bị xóa.
+
+**Giải pháp:**
+
+1. Kiểm tra project còn tồn tại trong Supabase Dashboard
+
+2. Vào Settings → API → copy lại **Project URL**
+
+3. Update secret `SUPABASE_URL` trên GitHub
+
+---
+
+### Lỗi: "Process completed with exit code 1"
+
+**Nguyên nhân :** Lỗi trong Node.js script.
+
+**Giải pháp:**
+
+1. Vào **Actions** tab → click vào workflow run bị lỗi
+
+2. Xem logs chi tiết ở step "Ping Supabase database"
+
+3. Tìm dòng bắt đầu bằng `❌ Error pinging Supabase:`
+
+4. Debug theo thông báo lỗi cụ thể
+
+---
+
+### Workflow không chạy tự động
+
+**Nguyên nhân :**
+
+- Repo mới tạo, chưa đến lịch đầu tiên
+
+- Workflow bị disable
+
+- File YAML sai syntax
+
+**Giải pháp:**
+
+1. Kiểm tra workflow có enabled không : **Actions** tab → chọn workflow → xem có nút "Enable workflow" không
+
+2. Kiểm tra syntax YAML : copy code vào [YAML Validator](https://www.yamllint.com/)
+
+3. Chạy thủ công 1 lần để test (xem Bước 4.1)
+
+---
+
+## 📚 Tài Nguyên Tham Khảo
+
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+
+- [Supabase API Documentation](https://supabase.com/docs/reference/javascript/introduction)
+
+- [Cron Expression Generator](https://crontab.guru/)
+
+- [YAML Syntax Validator](https://www.yamllint.com/)
+
+---
+
+## 🎯 Tóm Tắt Nhanh
+
+1. ✅ Tạo bảng `keep_alive` trong Supabase
+
+2. ✅ Tạo file `.github/workflows/supabase-keep-alive.yml` trong repo
+
+3. ✅ Thêm 2 secrets : `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY`
+
+4. ✅ Test workflow bằng cách chạy thủ công
+
+5. ✅ Xong ! Workflow sẽ tự động chạy mỗi 3-4 ngày
+
+**Thời gian:** 5-10 phút | **Chi phí:** 100% FREE | **Hiệu quả:** 99.9% uptime
+
+---
+
+## 💬 Cần Hỗ Trợ?
+
+Nếu bạn gặp vấn đề:
+
+1. Kiểm tra lại từng bước trong hướng dẫn này
+
+2. Xem phần **Xử Lý Lỗi** phía trên
+
+3. Kiểm tra logs trong **Actions** tab
+
+4. Hỏi tôi với thông tin cụ thể : screenshot logs, error message, v.v.
+
+---
+
+**🎉 Chúc bạn setup thành công !**
