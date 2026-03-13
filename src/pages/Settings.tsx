@@ -3,7 +3,7 @@ import { Plus, Edit2, Trash2, X, Loader2, BookOpen, Zap, TrendingDown, Shield, M
 import { supabase } from '../lib/supabase';
 import type { Criteria, Rank, Class } from '../types';
 import { useToast } from '../components/Toast';
-import { formatPoints } from '../lib/helpers';
+import { formatPoints, DEFAULT_RANKS } from '../lib/helpers';
 
 export default function Settings() {
     const { showToast } = useToast();
@@ -122,6 +122,11 @@ export default function Settings() {
     const positive = criteria.filter(c => c.type === 'positive');
     const negative = criteria.filter(c => c.type === 'negative');
 
+    // Fallback: nếu DB trống thì dùng DEFAULT_RANKS
+    const displayRanks: Rank[] = ranks.length > 0
+        ? ranks
+        : DEFAULT_RANKS.map((r, i) => ({ ...r, id: `default-${i}` }));
+
     if (loading) {
         return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-flame-500 border-t-transparent rounded-full animate-spin" /></div>;
     }
@@ -200,7 +205,7 @@ export default function Settings() {
                 <div className="glass-strong rounded-2xl p-5">
                     <h3 className="text-sm font-bold text-gray-800 mb-4">10 Cấp bậc Quân đội Việt Nam</h3>
                     <div className="space-y-3">
-                        {ranks.map(r => (
+                        {displayRanks.map(r => (
                             <div key={r.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/50">
                                 <span className="text-2xl">{r.icon}</span>
                                 <div className="flex-1">
